@@ -21,6 +21,10 @@ const ScrollPage: React.FC<ScrollPageProp> = ({
 	singlePageItemCount = 1,
 }) => {
 	const [currentPageIndex, setCurrentPageIndex] = useState<number>(0);
+	const [top, setTop] = useState<number>(0);
+	const [left, setLeft] = useState<number>(0);
+	const [width, setWidth] = useState<number>(0);
+	const [height, setHeight] = useState<number>(0);
 	const [scrollCb, setScrollCb] = useState<Function | null>(null);
 	const [delay, setDelay] = useState<number | null>(null);
 
@@ -31,26 +35,36 @@ const ScrollPage: React.FC<ScrollPageProp> = ({
 		const component = isSingleChildren(children) ? children : [children];
 		return chunkAry(component as React.ReactNode[], singlePageItemCount).map(
 			(child, index) => (
-				<div style={page} key={index} className="scroll-page">
+				<div
+					style={{ ...page, minWidth: width, minHeight: height, width, height }}
+					key={index}
+					className="scroll-page"
+				>
 					{child}
 				</div>
 			)
 		);
-	}, [children, singlePageItemCount]);
+	}, [children, singlePageItemCount, width, height]);
 
 	useEffect(() => {
-		const finalPageIndex = scrollPageCompoent.length - 1;
+		document.querySelector("html")!.style.overflow = "hidden";
+		document.querySelector("body")!.style.overflow = "hidden";
+		setWidth(containerDiv.current!.parentElement!.offsetWidth);
+		setHeight(containerDiv.current!.parentElement!.offsetHeight);
+		//eslint-disable-next-line
+	}, []);
+
+	useEffect(() => {
 		scrollHandler.current = new ScrollHelper(
-			direction,
-			finalPageIndex,
-			containerDiv.current!,
-			scrollGap,
-			setDelay,
 			setCurrentPageIndex,
-			setScrollCb
+			setLeft,
+			setTop,
+			setDelay,
+			containerDiv.current!,
+			direction
 		);
 		//eslint-disable-next-line
-	}, [scrollPageCompoent.length]);
+	}, [width, height]);
 
 	useInterval(delay, scrollCb);
 
@@ -62,36 +76,20 @@ const ScrollPage: React.FC<ScrollPageProp> = ({
 		return pageCount > 1;
 	}, [pageCount]);
 
-	const constainerStyle = useMemo(() => {
-		if (direction === "vertical") {
-			return { ...container, ...vertical };
-		} else {
-			return { ...container, ...horizon };
-		}
-	}, [direction]);
-
-	const onUserScroll = (e: React.UIEvent<HTMLDivElement>) => {
-		e.stopPropagation();
-		// const xScroll = containerDiv.current!.scrollLeft;
-		// const yScroll = containerDiv.current!.scrollTop;
-		// const pageWidth = containerDiv.current!.offsetWidth;
-		// const pageHeight = containerDiv.current!.offsetHeight;
-		// let page = 0;
-		// if (direction === "horizon") {
-		// 	page = xScroll / pageWidth;
-		// } else {
-		// 	page = yScroll / pageHeight;
-		// }
-
-		// if (Math.floor(page) !== currentPageIndex) {
-		// 	setCurrentPageIndex(Math.floor(page));
-		// }
-
+	const onUserScroll = (e: React.WheelEvent<HTMLElement>) => {
 		if (delay !== null) return;
-		const cb = scrollHandler.current!.getCallback(currentPageIndex);
-		if (!cb) return;
-		setDelay(5);
-		setScrollCb(() => cb);
+		const { deltaX, deltaY } = e;
+		const cb = scrollHandler.current!.getCallback(
+			top,
+			left,
+			currentPageIndex,
+			deltaX,
+			deltaY
+		);
+		if (cb !== null) {
+			setScrollCb(() => cb);
+			setDelay(100);
+		}
 	};
 
 	const uiPageDot = () => {
@@ -115,10 +113,19 @@ const ScrollPage: React.FC<ScrollPageProp> = ({
 	return (
 		<div style={cover} className="scrll-cover">
 			<div
-				ref={containerDiv}
-				onScroll={onUserScroll}
-				style={constainerStyle}
 				className="scrll-page-container"
+				ref={containerDiv}
+				onWheel={onUserScroll}
+				style={{
+					...container,
+					top: `${top}px`,
+					left: `${left}px`,
+					transition: `left 1000ms, top 1000ms`,
+					flexDirection: direction === "horizon" ? "row" : "column",
+				}}
+				// style={
+				// 	delay === null ? container : { ...container, overflow: "hidden" }
+				// }
 			>
 				{scrollPageCompoent}
 			</div>
@@ -130,45 +137,32 @@ const ScrollPage: React.FC<ScrollPageProp> = ({
 export default ScrollPage;
 
 const cover: CSSType.Properties = {
-	width: "100%",
-	height: "100%",
-	position: "relative",
+	top: "0",
+	bottom: "0",
+	left: "0",
+	right: "0",
+	position: "absolute",
 	overflow: "hidden",
 	display: "flex",
 };
 
 const container: CSSType.Properties = {
-	width: "100%",
-	height: "100%",
-	position: "relative",
+	top: "0",
+	bottom: "0",
+	left: "0",
+	right: "0",
+	position: "absolute",
 	display: "flex",
 	justifyContent: "start",
 	alignItems: "center",
-	overflow: "scroll",
-};
-
-const horizon: CSSType.Properties = {
-	// scrollSnapPointsX: "repeat(100%)",
-	// scrollSnapType: "x mandatory",
-};
-
-const vertical: CSSType.Properties = {
-	flexDirection: "column",
-	// scrollSnapPointsY: "repeat(100%)",
-	// scrollSnapType: "y mandatory",
+	overflow: "visble",
+	width: "fit-content",
+	height: "fit-content",
 };
 
 const page: CSSType.Properties = {
-	minWidth: "100%",
-	width: "100%",
-	minHeight: "100%",
-	height: "100%",
 	position: "relative",
 	overflow: "hidden",
-	scrollSnapAlign: "start",
-	scrollSnapStop: "normal",
-	scrollMargin: "0",
-	scrollPadding: "0",
 };
 
 const pageDot: CSSType.Properties = {
